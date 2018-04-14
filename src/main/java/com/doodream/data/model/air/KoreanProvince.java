@@ -1,6 +1,6 @@
 package com.doodream.data.model.air;
 
-public enum Province {
+public enum KoreanProvince {
     Seoul("Seoul"),
     Pusan("Pusan"),
     Daegu("Daegu"),
@@ -20,7 +20,7 @@ public enum Province {
     Jeju("Jeju");
 
     final private String name;
-    Province(String name) {
+    KoreanProvince(String name) {
         this.name = name;
     }
 
