@@ -1,8 +1,5 @@
 package com.doodream.data.model.air;
 
-import com.google.gson.annotations.SerializedName;
-import lombok.Data;
-
 public enum Province {
     Seoul("Seoul"),
     Pusan("Pusan"),
