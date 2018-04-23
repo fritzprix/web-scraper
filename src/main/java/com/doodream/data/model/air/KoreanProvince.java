@@ -26,6 +26,7 @@ public enum KoreanProvince {
 
     @Override
     public String toString() {
-        return super.toString();
+        return name;
     }
+
 }

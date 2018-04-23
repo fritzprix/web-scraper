@@ -71,8 +71,10 @@ public class DailyAirConditionDetail {
 
     @SerializedName("disTm")
     private String displayTime;
+
     @SerializedName("genTm")
     private String publishTime;
+
     @SerializedName("province")
     private KoreanProvince province;
 
@@ -92,8 +94,7 @@ public class DailyAirConditionDetail {
 
         @SerializedName("value")
         Double value;
+
     }
-
-
 
 }

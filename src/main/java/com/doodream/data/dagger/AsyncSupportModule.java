@@ -49,7 +49,6 @@ public class AsyncSupportModule {
             public List<Cookie> loadForRequest(HttpUrl httpUrl) {
                 List<Cookie> cookies = cookieCache.get(httpUrl.host());
                 if(cookies != null) {
-//                    System.out.printf("Requested /w : %s for %s\n", cookies.toString(), httpUrl.toString());
                     return cookies;
                 }
                 return Collections.EMPTY_LIST;
@@ -59,7 +58,7 @@ public class AsyncSupportModule {
     }
 
     @Provides
-    OkHttpClient provideOKhttpClient(CookieJar cookieJar) {
+    OkHttpClient provideOkHttpClient(CookieJar cookieJar) {
         return new OkHttpClient.Builder()
                 .cookieJar(cookieJar)
                 .build();

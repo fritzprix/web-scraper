@@ -1,4 +1,4 @@
-package com.doodream.data.model;
+package com.doodream.data.model.weather;
 
 import com.doodream.data.client.model.weather.Location;
 import com.doodream.data.client.model.weather.Channel;
@@ -8,7 +8,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import okhttp3.ResponseBody;
 import retrofit2.Response;
 
 import java.text.ParseException;
@@ -23,7 +22,7 @@ import java.util.Locale;
 public class WeatherInfo {
 
     private String pubTime;
-    private String kstTime;
+    private String displayTime;
     private String province;
     private String city;
     private String forecast;
@@ -61,7 +60,7 @@ public class WeatherInfo {
                             .tempMax(weatherData.getMaxTemp())
                             .tempMin(weatherData.getMinTemp())
                             .forecast(weatherData.getForecast())
-                            .kstTime(DATE_FORMATTER.get().format(TM_DATE_PARSER.get().parse(weatherData.getTime())))
+                            .displayTime(DATE_FORMATTER.get().format(TM_DATE_PARSER.get().parse(weatherData.getTime())))
                             .pubTime(DATE_FORMATTER.get().format(PUB_DATE_PARSER.get().parse(channel.getPubDate())))
                             .province(location.getProvince())
                             .city(location.getCity()).build());
@@ -71,5 +70,9 @@ public class WeatherInfo {
             }));
             emitter.onComplete();
         });
+    }
+
+    public static <K> String getUniqueKey(WeatherInfo weatherInfo) {
+        return String.format("%s/%s", weatherInfo.displayTime, weatherInfo.province);
     }
 }

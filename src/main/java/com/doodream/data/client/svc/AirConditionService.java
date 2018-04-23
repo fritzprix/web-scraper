@@ -48,10 +48,6 @@ public interface AirConditionService {
             this.code = code;
         }
 
-        public static Observable<ItemCode> iterObservable() {
-            return Observable.fromPublisher(PublishProcessor.fromArray(values()));
-        }
-
         public String code() {
             return code;
         }
@@ -74,18 +70,19 @@ public interface AirConditionService {
                     throw new IllegalArgumentException("");
             }
         }
+
+        public static ItemCode value(Long aLong) {
+            ItemCode[] items = values();
+            return items[(int) (aLong % items.length)];
+        }
     }
 
     @GET("/sidoCompare")
     Single<Response<ResponseBody>> login();
 
-    @GET("/sidoCompare")
-    Single<Response<ResponseBody>> getAirCondition(
-            @Query("itemCode") ItemCode itemCode
-    );
 
     @GET("/sidoCompare_p01")
-    Single<Response<AirCharts>> getAirConditionDetail(
+    Single<Response<ResponseBody>> getAirConditionDetail(
             @Query("itemCode") ItemCode itemCode,
             @Query("ymd") String ymd,
             @Query("areaCode") String area
