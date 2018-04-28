@@ -4,11 +4,8 @@ import com.doodream.data.client.model.air.AirCharts;
 import com.doodream.data.client.svc.AirConditionService;
 import com.doodream.data.dagger.DaggerClientComponent;
 import com.doodream.data.model.air.DailyAirConditionSummary;
-import com.google.gson.Gson;
 import io.reactivex.Observable;
-import io.reactivex.Scheduler;
 import io.reactivex.Single;
-import okhttp3.OkHttpClient;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import retrofit2.Response;
@@ -16,12 +13,11 @@ import retrofit2.Retrofit;
 import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory;
 import retrofit2.converter.gson.GsonConverterFactory;
 
-import javax.inject.Inject;
 import java.text.ParseException;
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class AirQualityClient extends AsyncWebClient {
+public class AirQualityClient extends ReactiveClient {
     public static final Logger LOGGER = LogManager.getLogger(AirQualityClient.class);
     private ConcurrentHashMap<String, DailyAirConditionSummary> airSummaryCache;
     private AirConditionService airConditionService;
@@ -64,13 +60,12 @@ public class AirQualityClient extends AsyncWebClient {
                 .map(Single::blockingGet)
                 .doOnNext(this::cacheDailyAirSummary)
                 .filter(DailyAirConditionSummary::isUpdated)
-                .doOnNext(System.out::println)
                 .subscribe(emitter::onNext)))
                 .subscribeOn(getScheduler());
     }
 
     private void cacheDailyAirSummary(DailyAirConditionSummary dailyAirConditionSummary) throws ParseException {
-        String key = DailyAirConditionSummary.getUniqueKey(dailyAirConditionSummary);
+        final String key = DailyAirConditionSummary.getUniqueKey(dailyAirConditionSummary);
         DailyAirConditionSummary lastSummary = airSummaryCache.get(key);
         if(lastSummary == null) {
             airSummaryCache.put(key, dailyAirConditionSummary);

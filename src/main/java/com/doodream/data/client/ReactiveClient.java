@@ -8,7 +8,7 @@ import okhttp3.OkHttpClient;
 import javax.inject.Inject;
 
 @Data
-public class AsyncWebClient {
+public class ReactiveClient {
 
     @Inject
     Scheduler scheduler;

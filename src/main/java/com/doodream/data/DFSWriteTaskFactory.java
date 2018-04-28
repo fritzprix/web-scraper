@@ -19,7 +19,7 @@ public class DFSWriteTaskFactory {
 
     private Observable<Path> parentObservable;
     private FileContext fileContext;
-    private ConcurrentHashSet<FSDataOutputStream> activeStream;
+    private ConcurrentHashSet<FSDataOutputStream> activeStream; // TODO: manage active task set , instead of stream
 
     public DFSWriteTaskFactory(String path, Configuration hdConfiguration) throws UnsupportedFileSystemException {
         this.fileContext = FileContext.getFileContext(hdConfiguration);
@@ -48,7 +48,8 @@ public class DFSWriteTaskFactory {
                 .doOnNext(this::checkParentDirectory)
                 .map(this::getDataOutputStream)
                 .doOnNext(this::addOutputStream)
-                .subscribe(fsDataOutputStream -> observableEmitter.onNext(DFSWriteTask.create(fsDataOutputStream, observable.doOnComplete(() -> removeOutputStream(fsDataOutputStream)))), observableEmitter::onError, observableEmitter::onComplete)));
+                .subscribe(fsDataOutputStream -> observableEmitter
+                        .onNext(DFSWriteTask.create(fsDataOutputStream, observable.doOnComplete(() -> removeOutputStream(fsDataOutputStream)))), observableEmitter::onError, observableEmitter::onComplete)));
     }
 
     private void removeOutputStream(FSDataOutputStream fsDataOutputStream) {
@@ -66,12 +67,13 @@ public class DFSWriteTaskFactory {
     }
 
     private FSDataOutputStream getDataOutputStream(Path path) throws IOException {
+        // TODO : need some enum type define create flags & pre-condition handle before opening output stream
         if (fileContext.util().exists(path)) {
-//            if (fileContext.delete(path, true)) {
-//                System.out.printf("File Deleted : %s\n", path.getName());
-//                LOGGER.debug("File Deleted : {}", path.getName());
-//            }
-            return fileContext.create(path, EnumSet.of(CreateFlag.APPEND));
+            if (fileContext.delete(path, true)) {
+                System.out.printf("File Deleted : %s\n", path.getName());
+                LOGGER.debug("File Deleted : {}", path.getName());
+            }
+            return fileContext.create(path, EnumSet.of(CreateFlag.APPEND, CreateFlag.CREATE));
         }
         return fileContext.create(path, EnumSet.of(CreateFlag.CREATE, CreateFlag.APPEND));
     }

@@ -9,7 +9,7 @@ import retrofit2.Retrofit;
 import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory;
 import retrofit2.converter.simplexml.SimpleXmlConverterFactory;
 
-public class WeatherClient extends AsyncWebClient {
+public class WeatherClient extends ReactiveClient {
 
     private WeatherService weatherService;
 

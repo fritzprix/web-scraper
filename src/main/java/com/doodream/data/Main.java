@@ -2,7 +2,10 @@ package com.doodream.data;
 
 import com.doodream.data.chrono.TimedSchedule;
 import com.doodream.data.client.AirQualityClient;
+import com.doodream.data.client.GoogleNewClient;
 import com.doodream.data.client.WeatherClient;
+import com.doodream.data.client.model.news.NewsContent;
+import com.doodream.data.client.svc.GoogleNewsService;
 import com.doodream.data.dagger.DaggerClientComponent;
 import com.doodream.data.model.air.DailyAirConditionSummary;
 import com.doodream.data.model.weather.WeatherInfo;
@@ -15,37 +18,70 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.UnsupportedFileSystemException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
+import org.openqa.selenium.By;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
+import org.openqa.selenium.chrome.ChromeDriver;
 
+import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.util.List;
+import java.util.Scanner;
 import java.util.concurrent.TimeUnit;
 
 public class Main {
     private static final Logger Log = LogManager.getLogger(Main.class);
     private static final Gson GSON = new Gson();
-    public static void main(String[] args) throws InterruptedException, UnsupportedFileSystemException {
+    public static void main(String[] args) throws InterruptedException, IOException {
 
         DaggerClientComponent.create();
 
         CompositeDisposable compositeDisposable = new CompositeDisposable();
         WeatherClient weatherClient = new WeatherClient();
         AirQualityClient airQualityClient = new AirQualityClient();
+        GoogleNewClient googleNewClient = new GoogleNewClient();
 
         Configuration hdConfiguration = new Configuration();
         hdConfiguration.set("fs.defaultFS", "hdfs://rpi-cluster-master:9000");
 
 
-        Observable<Long> minuteHeartbeat = TimedSchedule.getHeartbeat(10L, TimeUnit.SECONDS);
-        DFSWriteTaskFactory airWriteTaskFactory = new DFSWriteTaskFactory("/user/hduser/logs/air", hdConfiguration);
-        DFSWriteTaskFactory weatherWriteTaskFactory = new DFSWriteTaskFactory("/user/hduser/logs/weather", hdConfiguration);
+        Observable<Long> minuteHeartbeat = TimedSchedule.getHeartbeat(1L, TimeUnit.MINUTES);
+        Observable<Long> fastHeartbeat = TimedSchedule.getHeartbeat(5L, TimeUnit.SECONDS);
+
+
+
+//        WebDriver webDriver = new ChromeDriver();
+//        webDriver.get("https://www.forbes.com/sites/ralphjennings/2018/04/26/china-is-tightening-its-grip-on-cryptocurrency-to-promote-rather-than-purge-it");
+//        Document document = Jsoup.parse(webDriver.getPageSource());
+//        Elements elements = document.select("p");
+//        for (Element element : elements) {
+//            System.out.println(element.text());
+//        }
+
+
+//        DFSWriteTaskFactory airWriteTaskFactory = new DFSWriteTaskFactory("/user/hduser/logs/air", hdConfiguration);
+//        DFSWriteTaskFactory weatherWriteTaskFactory = new DFSWriteTaskFactory("/user/hduser/logs/weather", hdConfiguration);
+//        DFSWriteTaskFactory newsWriteTaskFactory = new DFSWriteTaskFactory("/user/hduser/logs/weather", hdConfiguration);
 
         compositeDisposable.add(minuteHeartbeat
-                .doOnNext(Main.collectWeather(weatherClient, compositeDisposable, weatherWriteTaskFactory))
-                .doOnNext(Main.collectAirData(airQualityClient, compositeDisposable, airWriteTaskFactory))
+//                .doOnNext(Main.collectWeather(weatherClient, compositeDisposable, weatherWriteTaskFactory))
+//                .doOnNext(Main.collectAirData(airQualityClient, compositeDisposable, airWriteTaskFactory))
+                .doOnNext(Main.collectNews(googleNewClient, compositeDisposable, null))
+                .subscribe());
+
+        compositeDisposable.add(fastHeartbeat
                 .subscribe());
 
 
         Runtime.getRuntime().addShutdownHook(new Thread(()->{
-            airWriteTaskFactory.close();
-            weatherWriteTaskFactory.close();
+//            airWriteTaskFactory.close();
+//            weatherWriteTaskFactory.close();
             compositeDisposable.clear();
         }));
 
@@ -53,6 +89,14 @@ public class Main {
         while (true) {
             Thread.sleep(1000L);
         }
+    }
+
+    private static Consumer<? super Long> collectNews(GoogleNewClient googleNewClient, CompositeDisposable compositeDisposable, DFSWriteTaskFactory newsWriteTaskFactory) {
+        return aLong -> compositeDisposable.add(googleNewClient.getNewsContentsByKeyword("cryptocurrency","US","EN","EN")
+                .toObservable()
+                .flatMap(NewsContent::extractNewsContents)
+                .doOnNext(System.out::println)
+                .subscribe());
     }
 
     private static Consumer<? super Long> collectAirData(AirQualityClient airQualityClient, CompositeDisposable compositeDisposable, DFSWriteTaskFactory airWriteTaskFactory) {
