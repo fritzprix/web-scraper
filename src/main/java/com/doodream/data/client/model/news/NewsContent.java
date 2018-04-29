@@ -1,21 +1,24 @@
 package com.doodream.data.client.model.news;
 
+import com.doodream.data.util.Https;
 import io.reactivex.Observable;
+import io.reactivex.ObservableSource;
+import io.reactivex.Single;
+import io.reactivex.observables.GroupedObservable;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.net.URLConnection;
 import java.text.SimpleDateFormat;
-import java.util.Scanner;
+import java.time.Instant;
+import java.util.Date;
+import java.util.Locale;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @AllArgsConstructor
@@ -25,17 +28,28 @@ import java.util.regex.Pattern;
 public class NewsContent {
     private static final Pattern TAG_MATCHER = Pattern.compile("\\<[^><]+\\>");
     private static final Pattern ARTICLE_MATCHER = Pattern.compile("\\<article[^<>]+\\>([\\s\\S]+)\\<\\/article\\>");
-    private static final Pattern DATE_MATCHER = Pattern.compile("([\\s\\S]+)\\s?GMT");
-    private static final String DATE_PATTERN = "EEE, dd MMM yyyy hh:mm:ss";
-    private static final String AGENT_PROPERTY[] = {
-            "User-Agent",
-            "Mozilla/5.0 (Windows; U; WindowsNT 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6"
-    };
+    private static final Pattern DATE_MATCHER = Pattern.compile("[a-zA-Z]+,([\\s\\S]+)\\s?GMT");
+
+    private static final String CSS_SELECT_META = "meta";
+    private static final String CSS_SELECT_PARAGRAPH = "p";
+
+    private static final String UNKNOWN_VALUE = "UNKNOWN";
+    private static final String ANY_NONE_ALPHA = "[^a-zA-Z]+";
+
+    private static final String ATTR_CONTENT = "content";
+    private static final String ATTR_NAME = "name";
+    private static final String ATTR_PROP = "property";
+
+    private static final String DATE_PATTERN = "dd MMM yyyy hh:mm:ss";
+
+    private static final String AGENT_KEY = "User-Agent";
+    private static final String AGENT_PROPERTY = "Mozilla/5.0 (Windows; U; WindowsNT 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6";
 
 
     private static ThreadLocal<SimpleDateFormat> dateFormatThreadLocal = new ThreadLocal<>();
 
     String source;
+    String author;
     String url;
     String title;
     Long pubDateInEpoch;
@@ -46,70 +60,96 @@ public class NewsContent {
 
     public static Observable<NewsContent> extractNewsContents(GoogleNewsRSS googleNewsRSS) {
 
-        Observable<GoogleNewsRSSItem> itemsObservable = Observable.fromIterable(googleNewsRSS.getChannel().getItems());
 
-        Observable<HttpURLConnection> urlObservable = itemsObservable
-                .map(GoogleNewsRSSItem::getLink)
-                .map(URL::new)
-                .map(URL::openConnection)
-                .cast(HttpURLConnection.class)
-                .doOnNext(HttpURLConnection::connect);
+        return Observable.fromIterable(googleNewsRSS.getChannel().getItems())
+                .groupBy(GoogleNewsRSSItem::getLink)
+                .flatMap(NewsContent::buildFromUrl);
 
-        Observable<HttpURLConnection> connectionObservable = urlObservable
-                .filter(NewsContent::isSuccessful);
-
-        Observable<HttpURLConnection> agentCheckConnectionObservable = urlObservable
-                .filter(httpURLConnection -> !NewsContent.isSuccessful(httpURLConnection)) //
-                .doOnNext(HttpURLConnection::disconnect)
-                .map(URLConnection::getURL)
-                .map(URL::openConnection)
-                .cast(HttpURLConnection.class)
-                .doOnNext(httpURLConnection -> httpURLConnection.setRequestProperty(AGENT_PROPERTY[0], AGENT_PROPERTY[1]))
-                .doOnNext(URLConnection::connect)
-                .filter(NewsContent::isSuccessful);
-
-        Observable<String> contentObservable = agentCheckConnectionObservable.mergeWith(connectionObservable)
-                .map(HttpURLConnection::getInputStream)
-                .map(NewsContent::toHtmlString)
-                .map(Jsoup::parse)
-                .map(document -> document.select("p"))
-                .map(NewsContent::extractValue);
-
-        return itemsObservable
-                .map(NewsContent::fromRssItem)
-                .zipWith(contentObservable, (newsContent, s) -> {
-                    newsContent.setBody(s);
-                    return newsContent;
-                });
     }
 
-    private static boolean isSuccessful(HttpURLConnection httpURLConnection) throws IOException {
-        return httpURLConnection.getResponseCode() == HttpURLConnection.HTTP_OK;
+    private static <R> ObservableSource<NewsContent> buildFromUrl(GroupedObservable<String, GoogleNewsRSSItem> observable) {
+        return Https.getResponse(observable.getKey())
+                .zipWith(observable, NewsContent::build);
     }
 
-
-    private static <R> String toHtmlString(InputStream inputStream) {
-        StringBuilder stringBuilder = new StringBuilder();
-        Scanner scanner = new Scanner(inputStream);
-        while (scanner.hasNext()) {
-            stringBuilder.append(scanner.nextLine().concat("\n"));
-        }
-        return stringBuilder.toString();
-    }
-
-    private static <R> String extractValue(Elements elements) {
-
-        return Observable.fromIterable(elements).map(Element::text).reduce(String::concat).blockingGet();
-    }
-
-
-    private static <R> NewsContent fromRssItem(GoogleNewsRSSItem googleNewsRSSItem) {
+    private static NewsContent build(String htmlText, GoogleNewsRSSItem newsItem) {
+        Document document = Jsoup.parse(htmlText);
+        Elements meta = document.select(CSS_SELECT_META);
 
         return NewsContent.builder()
-                .url(googleNewsRSSItem.link)
-                .source(googleNewsRSSItem.link)
-                .title(googleNewsRSSItem.title)
-                .category(googleNewsRSSItem.category)
+                .title(newsItem.getTitle())
+                .pubDateInEpoch(NewsContent.extractEpoch(newsItem.getPubDate()))
+                .source(extractSource(meta))
+                .author(extractAuthor(meta))
+                .url(newsItem.getLink())
+                .category(newsItem.getCategory())
+                .body(extractArticle(document))
+                .description(extractDescription(meta))
                 .build();
     }
+
+    private static String extractAuthor(Elements meta) {
+        return Observable.fromIterable(meta)
+                .filter(NewsContent::hasAuthor)
+                .map(element -> element.attr(ATTR_CONTENT))
+                .blockingFirst(UNKNOWN_VALUE).toUpperCase();
+    }
+
+
+    private static String extractSource(Elements meta) {
+        return Observable.fromIterable(meta)
+                .filter(NewsContent::hasSourceInfo)
+                .map(element -> element.attr(ATTR_CONTENT))
+                .blockingFirst(UNKNOWN_VALUE).replaceAll(ANY_NONE_ALPHA,"").toUpperCase();
+    }
+
+
+    private static String extractArticle(Document document) {
+        return Observable.fromIterable(document.body().select(CSS_SELECT_PARAGRAPH))
+                .map(Element::text)
+                .reduce(String::concat)
+                .blockingGet();
+    }
+
+    private static Long extractEpoch(String pubDate) {
+        if(dateFormatThreadLocal.get() == null) {
+            dateFormatThreadLocal.set(new SimpleDateFormat(DATE_PATTERN, Locale.ENGLISH));
+        }
+        return Single.just(DATE_MATCHER.matcher(pubDate))
+                .filter(Matcher::matches)
+                .map(matcher -> matcher.group(1))
+                .map(String::trim)
+                .map((date) -> dateFormatThreadLocal.get().parse(date))
+                .map(Date::toInstant)
+                .map(Instant::getEpochSecond)
+                .toSingle(-1L).blockingGet();
+    }
+
+
+    private static <R> String extractDescription(Elements meta) {
+
+        return Observable.fromIterable(meta)
+                .filter(NewsContent::hasDescription)
+                .map(element -> element.attr(ATTR_CONTENT))
+                .reduce(String::concat)
+                .blockingGet("");
+    }
+
+    private static boolean hasDescription(Element element) {
+        return element.attr(ATTR_NAME).equalsIgnoreCase("description")
+                || element.attr(ATTR_PROP).equalsIgnoreCase("description");
+    }
+
+    // TODO : the location of source information varies through out content providers
+    // for example, reuters provides U.S as a content for meta tag of og.site_name
+    private static boolean hasSourceInfo(Element element) {
+        return element.attr(ATTR_NAME).contains("site_name")
+                || element.attr(ATTR_PROP).contains("site_name");
+    }
+
+    private static boolean hasAuthor(Element element) {
+        return element.attr(ATTR_NAME).equalsIgnoreCase("author")
+                || element.attr(ATTR_PROP).equalsIgnoreCase("author");
+    }
+
 }
