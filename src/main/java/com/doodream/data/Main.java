@@ -5,34 +5,21 @@ import com.doodream.data.client.AirQualityClient;
 import com.doodream.data.client.GoogleNewClient;
 import com.doodream.data.client.WeatherClient;
 import com.doodream.data.client.model.news.NewsContent;
-import com.doodream.data.client.svc.GoogleNewsService;
 import com.doodream.data.dagger.DaggerClientComponent;
 import com.doodream.data.model.air.DailyAirConditionSummary;
 import com.doodream.data.model.weather.WeatherInfo;
+import com.doodream.data.util.hdfs.DFSWriteTask;
+import com.doodream.data.util.hdfs.DFSWriteTaskFactory;
 import com.google.gson.Gson;
 import io.reactivex.Observable;
 import io.reactivex.Single;
 import io.reactivex.disposables.CompositeDisposable;
 import io.reactivex.functions.Consumer;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.UnsupportedFileSystemException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
-import org.openqa.selenium.By;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.WebElement;
-import org.openqa.selenium.chrome.ChromeDriver;
 
 import java.io.IOException;
-import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.util.List;
-import java.util.Scanner;
 import java.util.concurrent.TimeUnit;
 
 public class Main {

@@ -18,7 +18,6 @@ import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class AirQualityClient extends ReactiveClient {
-    public static final Logger LOGGER = LogManager.getLogger(AirQualityClient.class);
     private ConcurrentHashMap<String, DailyAirConditionSummary> airSummaryCache;
     private AirConditionService airConditionService;
 
@@ -80,4 +79,5 @@ public class AirQualityClient extends ReactiveClient {
             }
         }
     }
+
 }

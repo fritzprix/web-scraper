@@ -1,6 +1,6 @@
 package com.doodream.data.client.model.news;
 
-import com.doodream.data.util.Https;
+import com.doodream.data.util.net.HttpRequest;
 import io.reactivex.Observable;
 import io.reactivex.ObservableSource;
 import io.reactivex.Single;
@@ -68,7 +68,7 @@ public class NewsContent {
     }
 
     private static <R> ObservableSource<NewsContent> buildFromUrl(GroupedObservable<String, GoogleNewsRSSItem> observable) {
-        return Https.getResponse(observable.getKey())
+        return HttpRequest.getResponse(observable.getKey())
                 .zipWith(observable, NewsContent::build);
     }
 
@@ -92,7 +92,15 @@ public class NewsContent {
         return Observable.fromIterable(meta)
                 .filter(NewsContent::hasAuthor)
                 .map(element -> element.attr(ATTR_CONTENT))
+                .map(NewsContent::avoidEmpty)
                 .blockingFirst(UNKNOWN_VALUE).toUpperCase();
+    }
+
+    private static <R> String avoidEmpty(String s) {
+        if(s.isEmpty()) {
+            return UNKNOWN_VALUE;
+        }
+        return s;
     }
 
 
@@ -151,5 +159,10 @@ public class NewsContent {
         return element.attr(ATTR_NAME).equalsIgnoreCase("author")
                 || element.attr(ATTR_PROP).equalsIgnoreCase("author");
     }
+
+    public static String getUniqueKey(NewsContent content) {
+        return String.format("%s_%s", content.getUrl().hashCode(), content.getCategory().hashCode());
+    }
+
 
 }

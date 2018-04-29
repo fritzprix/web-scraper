@@ -5,7 +5,7 @@ import org.simpleframework.xml.Root;
 
 @lombok.Data
 @Root(name = "data")
-public class Data {
+public class WeatherData {
 
     @Element(name = "mode")
     String mode;

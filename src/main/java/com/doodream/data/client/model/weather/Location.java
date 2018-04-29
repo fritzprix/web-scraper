@@ -20,5 +20,5 @@ public class Location {
     String city;
 
     @ElementList(inline = true)
-    List<Data> data;
+    List<WeatherData> data;
 }

@@ -1,4 +1,4 @@
-package com.doodream.data;
+package com.doodream.data.util.hdfs;
 
 import io.reactivex.Observable;
 import io.reactivex.ObservableSource;
@@ -9,7 +9,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.eclipse.jetty.util.ConcurrentHashSet;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.EnumSet;
 

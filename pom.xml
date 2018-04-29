@@ -5,8 +5,17 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.doodream.data</groupId>
-    <artifactId>web_crawler_training</artifactId>
+    <artifactId>data-front</artifactId>
     <version>1.0-SNAPSHOT</version>
+
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
 
     <packaging>jar</packaging>
 
@@ -22,13 +31,13 @@
                             <goal>single</goal>
                         </goals>
                         <configuration>
-                            <archive>
-                                <manifest>
-                                    <mainClass>
-                                        com.doodream.data.Main
-                                    </mainClass>
-                                </manifest>
-                            </archive>
+                            <!--<archive>-->
+                                <!--<manifest>-->
+                                    <!--<mainClass>-->
+                                        <!--com.doodream.data.Main-->
+                                    <!--</mainClass>-->
+                                <!--</manifest>-->
+                            <!--</archive>-->
                             <descriptorRefs>
                                 <descriptorRef>jar-with-dependencies</descriptorRef>
                             </descriptorRefs>
@@ -48,6 +57,12 @@
         </plugins>
     </build>
     <dependencies>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.8.1</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>com.squareup.retrofit2</groupId>
             <artifactId>retrofit</artifactId>

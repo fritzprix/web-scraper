@@ -29,6 +29,7 @@ public class GoogleNewClient extends ReactiveClient {
         return googleNewsService.getHeadlineNewsContents(section, region, headline, ned)
                 .filter(Response::isSuccessful)
                 .map(Response::body)
+                .subscribeOn(getScheduler())
                 .toSingle();
     }
 
@@ -36,6 +37,7 @@ public class GoogleNewClient extends ReactiveClient {
         return googleNewsService.getNewsByKeyword(keyword, region, headline, ned)
                 .filter(Response::isSuccessful)
                 .map(Response::body)
+                .subscribeOn(getScheduler())
                 .toSingle();
     }
 

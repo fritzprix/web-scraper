@@ -1,4 +1,4 @@
-package com.doodream.data;
+package com.doodream.data.util.hdfs;
 
 import io.reactivex.Observable;
 import io.reactivex.Single;

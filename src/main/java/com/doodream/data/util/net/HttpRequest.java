@@ -1,15 +1,14 @@
-package com.doodream.data.util;
+package com.doodream.data.util.net;
 
-import io.reactivex.*;
+import io.reactivex.Observable;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.Scanner;
 
-public class Https {
+public class HttpRequest {
 
     private static final String AGENT_KEY = "User-Agent";
     private static final String AGENT_PROPERTY = "Mozilla/5.0 (Windows; U; WindowsNT 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6";
@@ -35,7 +34,7 @@ public class Https {
                 .map(URLConnection::getInputStream)
                 // if the request is not successful then try to get page mimicking browser
                 .onErrorResumeNext(browserUrlConnectionObservable.map(URLConnection::getInputStream))
-                .map(Https::toHtmlString);
+                .map(HttpRequest::toHtmlString);
 
 
     }
@@ -53,7 +52,7 @@ public class Https {
         return urlConnectionSingle;
     }
 
-    private static <R> String toHtmlString(InputStream inputStream) {
+    private static String toHtmlString(InputStream inputStream) {
         StringBuilder stringBuilder = new StringBuilder();
         Scanner scanner = new Scanner(inputStream);
         while (scanner.hasNext()) {
@@ -62,12 +61,4 @@ public class Https {
         return stringBuilder.toString();
     }
 
-
-    private static boolean isForbidden(HttpURLConnection httpURLConnection) throws IOException {
-        return httpURLConnection.getResponseCode() == HttpURLConnection.HTTP_FORBIDDEN;
-    }
-
-    private static boolean isSuccessful(HttpURLConnection httpURLConnection) throws IOException {
-        return httpURLConnection.getResponseCode() == HttpURLConnection.HTTP_OK;
-    }
 }
