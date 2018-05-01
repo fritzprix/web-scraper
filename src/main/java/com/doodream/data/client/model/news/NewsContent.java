@@ -1,8 +1,9 @@
 package com.doodream.data.client.model.news;
 
 import com.doodream.data.util.net.HttpRequest;
+import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
 import io.reactivex.Observable;
-import io.reactivex.ObservableSource;
 import io.reactivex.Single;
 import io.reactivex.observables.GroupedObservable;
 import lombok.AllArgsConstructor;
@@ -14,6 +15,7 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
+import java.net.URI;
 import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.util.Date;
@@ -29,6 +31,7 @@ public class NewsContent {
     private static final Pattern TAG_MATCHER = Pattern.compile("\\<[^><]+\\>");
     private static final Pattern ARTICLE_MATCHER = Pattern.compile("\\<article[^<>]+\\>([\\s\\S]+)\\<\\/article\\>");
     private static final Pattern DATE_MATCHER = Pattern.compile("[a-zA-Z]+,([\\s\\S]+)\\s?GMT");
+    private static final Pattern ADVERTISER = Pattern.compile("([.]+)?[Aa]dvertisement\\s?[.]+");
 
     private static final String CSS_SELECT_META = "meta";
     private static final String CSS_SELECT_PARAGRAPH = "p";
@@ -63,11 +66,17 @@ public class NewsContent {
 
         return Observable.fromIterable(googleNewsRSS.getChannel().getItems())
                 .groupBy(GoogleNewsRSSItem::getLink)
-                .flatMap(NewsContent::buildFromUrl);
+                .flatMap(NewsContent::buildFromUrl)
+                .filter(NewsContent::mustBodyNotEmpty)
+                .filter(NewsContent::mustNotHiddenByAdvertiser);
 
     }
 
-    private static <R> ObservableSource<NewsContent> buildFromUrl(GroupedObservable<String, GoogleNewsRSSItem> observable) {
+    private static boolean mustNotHiddenByAdvertiser(NewsContent content) {
+        return !ADVERTISER.matcher(content.getBody()).find();
+    }
+
+    private static <R> Observable<NewsContent> buildFromUrl(GroupedObservable<String, GoogleNewsRSSItem> observable) {
         return HttpRequest.getResponse(observable.getKey())
                 .zipWith(observable, NewsContent::build);
     }
@@ -76,24 +85,31 @@ public class NewsContent {
         Document document = Jsoup.parse(htmlText);
         Elements meta = document.select(CSS_SELECT_META);
 
-        return NewsContent.builder()
-                .title(newsItem.getTitle())
-                .pubDateInEpoch(NewsContent.extractEpoch(newsItem.getPubDate()))
-                .source(extractSource(meta))
-                .author(extractAuthor(meta))
-                .url(newsItem.getLink())
-                .category(newsItem.getCategory())
-                .body(extractArticle(document))
-                .description(extractDescription(meta))
-                .build();
+        return Observable.just(NewsContent.builder())
+                .doOnNext(newsContentBuilder -> newsContentBuilder.title(newsItem.getTitle()))
+                .doOnNext(newsContentBuilder -> newsContentBuilder.url(newsItem.getLink()))
+                .doOnNext(newsContentBuilder -> newsContentBuilder.category(newsItem.getCategory()))
+                .zipWith(NewsContent.extractEpoch(newsItem.getPubDate()), NewsContentBuilder::pubDateInEpoch)
+                .zipWith(extractSource(meta, URI.create(newsItem.getLink()).getHost()), NewsContentBuilder::source)
+                .zipWith(extractAuthor(meta),NewsContentBuilder::author)
+                .zipWith(extractDescription(meta), NewsContentBuilder::description)
+                .zipWith(extractArticle(document), NewsContentBuilder::body)
+                .map(NewsContentBuilder::build)
+                .blockingSingle();
+
     }
 
-    private static String extractAuthor(Elements meta) {
+    private static boolean mustBodyNotEmpty(NewsContent content) {
+        return !Strings.isNullOrEmpty(content.getBody());
+    }
+
+    private static Observable<String> extractAuthor(Elements meta) {
         return Observable.fromIterable(meta)
                 .filter(NewsContent::hasAuthor)
                 .map(element -> element.attr(ATTR_CONTENT))
                 .map(NewsContent::avoidEmpty)
-                .blockingFirst(UNKNOWN_VALUE).toUpperCase();
+                .defaultIfEmpty(UNKNOWN_VALUE)
+                .map(String::toUpperCase);
     }
 
     private static <R> String avoidEmpty(String s) {
@@ -104,22 +120,29 @@ public class NewsContent {
     }
 
 
-    private static String extractSource(Elements meta) {
+    private static Observable<String> extractSource(Elements meta, String host) {
         return Observable.fromIterable(meta)
                 .filter(NewsContent::hasSourceInfo)
                 .map(element -> element.attr(ATTR_CONTENT))
-                .blockingFirst(UNKNOWN_VALUE).replaceAll(ANY_NONE_ALPHA,"").toUpperCase();
+                .doOnNext(s -> Preconditions.checkArgument(!s.isEmpty()))
+                .onErrorResumeNext(Observable.just(host))
+                .map(Strings::nullToEmpty)
+                .filter(s -> !s.isEmpty())
+                .defaultIfEmpty(UNKNOWN_VALUE)
+                .map(s -> s.replaceAll(ANY_NONE_ALPHA,""))
+                .map(String::toUpperCase);
     }
 
 
-    private static String extractArticle(Document document) {
+    private static Observable<String> extractArticle(Document document) {
         return Observable.fromIterable(document.body().select(CSS_SELECT_PARAGRAPH))
                 .map(Element::text)
                 .reduce(String::concat)
-                .blockingGet();
+                .defaultIfEmpty("")
+                .toObservable();
     }
 
-    private static Long extractEpoch(String pubDate) {
+    private static Observable<Long> extractEpoch(String pubDate) {
         if(dateFormatThreadLocal.get() == null) {
             dateFormatThreadLocal.set(new SimpleDateFormat(DATE_PATTERN, Locale.ENGLISH));
         }
@@ -130,22 +153,24 @@ public class NewsContent {
                 .map((date) -> dateFormatThreadLocal.get().parse(date))
                 .map(Date::toInstant)
                 .map(Instant::getEpochSecond)
-                .toSingle(-1L).blockingGet();
+                .defaultIfEmpty(-1L)
+                .toObservable();
     }
 
 
-    private static <R> String extractDescription(Elements meta) {
+    private static Observable<String> extractDescription(Elements meta) {
 
         return Observable.fromIterable(meta)
                 .filter(NewsContent::hasDescription)
                 .map(element -> element.attr(ATTR_CONTENT))
                 .reduce(String::concat)
-                .blockingGet("");
+                .defaultIfEmpty("")
+                .toObservable();
     }
 
     private static boolean hasDescription(Element element) {
         return element.attr(ATTR_NAME).equalsIgnoreCase("description")
-                || element.attr(ATTR_PROP).equalsIgnoreCase("description");
+                || element.attr(ATTR_PROP).contains("description");
     }
 
     // TODO : the location of source information varies through out content providers

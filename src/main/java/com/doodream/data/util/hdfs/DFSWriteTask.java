@@ -11,6 +11,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 
 @Builder
 @AllArgsConstructor
@@ -22,6 +23,15 @@ public class DFSWriteTask {
     private FSDataOutputStream outputStream;
 
     public Single<TaskResult> run() {
+        return Single.<TaskResult>create(emitter -> emitter.setDisposable(dataSource
+                .subscribe(bytes -> outputStream.write(bytes),
+                        throwable -> emitter.onSuccess(TaskResult.ERROR),
+                        () -> emitter.onSuccess(TaskResult.OK))))
+                .doOnSuccess(this::onComplete)
+                .doOnError(this::onError);
+    }
+
+    public Single<TaskResult> run(long syncPeriod, TimeUnit unit) {
         return Single.<TaskResult>create(emitter -> emitter.setDisposable(dataSource
                 .subscribe(bytes -> outputStream.write(bytes),
                         throwable -> emitter.onSuccess(TaskResult.ERROR),

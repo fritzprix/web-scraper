@@ -2,6 +2,7 @@ package com.doodream.data.util.net;
 
 import io.reactivex.Observable;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -22,21 +23,28 @@ public class HttpRequest {
         // while accept non-browser connection(e.g. forbes.com ...)
         Observable<HttpURLConnection> nonBrowserUrlConnectionObservable = urlObservable
                 .flatMap(url -> buildConnection(url, false))
+                .doOnNext(httpURLConnection -> httpURLConnection.setReadTimeout(2000))
                 .doOnNext(URLConnection::connect);
 
         Observable<HttpURLConnection> browserUrlConnectionObservable = urlObservable
                 .flatMap(url -> buildConnection(url, true))
-                .doOnNext(URLConnection::connect);
+                .doOnNext(httpURLConnection -> httpURLConnection.setReadTimeout(2000))
+                .doOnNext(URLConnection::connect)
+                .filter(HttpRequest::isSuccessful);
 
 
         // then try to get html document with non-browser request (means no user-agent property)
         return nonBrowserUrlConnectionObservable
                 .map(URLConnection::getInputStream)
-                // if the request is not successful then try to get page mimicking browser
                 .onErrorResumeNext(browserUrlConnectionObservable.map(URLConnection::getInputStream))
-                .map(HttpRequest::toHtmlString);
+                .map(HttpRequest::toHtmlString)
+                .onErrorReturn(throwable -> "");
 
 
+    }
+
+    private static boolean isSuccessful(HttpURLConnection httpURLConnection) throws IOException {
+        return httpURLConnection.getResponseCode() == HttpURLConnection.HTTP_OK;
     }
 
     private static Observable<HttpURLConnection> buildConnection(URL url, boolean browserRequest) {

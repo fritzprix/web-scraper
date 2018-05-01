@@ -1,34 +1,35 @@
 package com.doodream.data.util.hdfs;
 
 import io.reactivex.Observable;
-import io.reactivex.ObservableSource;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.*;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.eclipse.jetty.util.ConcurrentHashSet;
 
 import java.io.IOException;
-import java.util.EnumSet;
 
 public class DFSWriteTaskFactory {
 
     private static final Logger LOGGER = LogManager.getLogger(DFSWriteTaskFactory.class);
 
     private Observable<Path> parentObservable;
-    private FileContext fileContext;
+//    private FileContext fileContext;
+    private FileSystem fileSystem;
     private ConcurrentHashSet<FSDataOutputStream> activeStream; // TODO: manage active task set , instead of stream
 
-    public DFSWriteTaskFactory(String path, Configuration hdConfiguration) throws UnsupportedFileSystemException {
-        this.fileContext = FileContext.getFileContext(hdConfiguration);
+    public DFSWriteTaskFactory(String path, Configuration hdConfiguration) throws IOException {
+        fileSystem = FileSystem.newInstance(hdConfiguration);
         activeStream = new ConcurrentHashSet<>();
         Path parent = new Path(path);
-        Path qualified = fileContext.makeQualified(parent);
+        Path qualified = fileSystem.makeQualified(parent);
         parentObservable = Observable.create(observableEmitter -> {
             try {
-                if (!fileContext.util().exists(qualified)) {
-                    fileContext.mkdir(qualified, FsPermission.getDirDefault(), true);
+                if (!fileSystem.exists(qualified)) {
+                    fileSystem.mkdirs(qualified, FsPermission.getDirDefault());
                 }
             } catch (Exception e) {
                 observableEmitter.onError(e);
@@ -39,11 +40,11 @@ public class DFSWriteTaskFactory {
     }
 
 
-    public ObservableSource<DFSWriteTask> create(String key, Observable<byte[]> observable) {
+    public Observable<DFSWriteTask> create(String key, Observable<byte[]> observable) {
 
         return Observable.create(observableEmitter -> observableEmitter.setDisposable(parentObservable
                 .map(path -> new Path(path, key))
-                .map(fileContext::makeQualified)
+                .map(fileSystem::makeQualified)
                 .doOnNext(this::checkParentDirectory)
                 .map(this::getDataOutputStream)
                 .doOnNext(this::addOutputStream)
@@ -60,21 +61,21 @@ public class DFSWriteTaskFactory {
     }
 
     private void checkParentDirectory(Path path) throws IOException {
-        if(!fileContext.util().exists(path.getParent())) {
-            fileContext.mkdir(path.getParent(),FsPermission.getDirDefault(),true);
+        if(!fileSystem.exists(path.getParent())) {
+            fileSystem.mkdirs(path.getParent(),FsPermission.getDirDefault());
         }
     }
 
     private FSDataOutputStream getDataOutputStream(Path path) throws IOException {
         // TODO : need some enum type define create flags & pre-condition handle before opening output stream
-        if (fileContext.util().exists(path)) {
-            if (fileContext.delete(path, true)) {
-                System.out.printf("File Deleted : %s\n", path.getName());
-                LOGGER.debug("File Deleted : {}", path.getName());
-            }
-            return fileContext.create(path, EnumSet.of(CreateFlag.APPEND, CreateFlag.CREATE));
+        if (fileSystem.exists(path)) {
+//            if (fileSystem.delete(path, true)) {
+//                System.out.printf("File Deleted : %s\n", path.getName());
+//                LOGGER.debug("File Deleted : {}", path.getName());
+//            }
+            return fileSystem.append(path);
         }
-        return fileContext.create(path, EnumSet.of(CreateFlag.CREATE, CreateFlag.APPEND));
+        return fileSystem.create(path, true);
     }
 
     public void close() {

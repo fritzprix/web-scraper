@@ -19,13 +19,22 @@ public class ClientTest {
 
     @Test
     public void modelConformToGoogleRssResponse() {
+        Observable.fromArray(Topic.values())
+                .map(Topic::getKeywords)
+                .flatMap(Observable::fromIterable)
+                .doOnNext(this::testByKeyword)
+                .blockingSubscribe();
+    }
+
+    private void testByKeyword(String kw) {
         GoogleNewClient googleNewClient = new GoogleNewClient();
-        GoogleNewsRSS rss = googleNewClient.getNewsContentsByKeyword("trump","US","EN","US").blockingGet();
+        GoogleNewsRSS rss = googleNewClient.getNewsContentsByKeyword(kw,"US","EN","US").blockingGet();
         assertNotNull(rss);
         List<NewsContent> contents = NewsContent.extractNewsContents(rss).toList().blockingGet();
         assertNotNull(contents);
         assertNotSame(contents.size(), 0);
         for (NewsContent content : contents) {
+            System.out.println(content);
             assertNotNull(content.getBody());
             assertNotNull(content.getTitle());
             assertFalse(content.getTitle().isEmpty());
@@ -37,7 +46,7 @@ public class ClientTest {
             assertFalse(content.getAuthor().isEmpty());
             assertNotNull(content.getSource());
             assertFalse(content.getSource().isEmpty());
-            assertFalse(content.getDescription().isEmpty());
+            assertNotNull(content.getDescription());
         }
     }
 
