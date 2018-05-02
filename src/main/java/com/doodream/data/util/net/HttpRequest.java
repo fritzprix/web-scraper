@@ -4,6 +4,7 @@ import io.reactivex.Observable;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLConnection;
@@ -37,6 +38,7 @@ public class HttpRequest {
         return nonBrowserUrlConnectionObservable
                 .map(URLConnection::getInputStream)
                 .onErrorResumeNext(browserUrlConnectionObservable.map(URLConnection::getInputStream))
+                .map(InputStreamReader::new)
                 .map(HttpRequest::toHtmlString)
                 // Any exceptions will give empty string
                 .onErrorReturn(throwable -> "");
@@ -61,9 +63,9 @@ public class HttpRequest {
         return urlConnectionSingle;
     }
 
-    private static String toHtmlString(InputStream inputStream) {
+    private static String toHtmlString(InputStreamReader isr) {
         StringBuilder stringBuilder = new StringBuilder();
-        Scanner scanner = new Scanner(inputStream);
+        Scanner scanner = new Scanner(isr);
         while (scanner.hasNext()) {
             stringBuilder.append(scanner.nextLine().concat("\n"));
         }

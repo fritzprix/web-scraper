@@ -19,16 +19,16 @@ public class ClientTest {
 
     @Test
     public void modelConformToGoogleRssResponse() {
+        GoogleNewClient googleNewClient = new GoogleNewClient();
         Observable.fromArray(Topic.values())
                 .map(Topic::getKeywords)
                 .flatMap(Observable::fromIterable)
-                .doOnNext(this::testByKeyword)
+                .doOnNext(s -> testByKeyword(s, googleNewClient))
                 .blockingSubscribe();
     }
 
-    private void testByKeyword(String kw) {
-        GoogleNewClient googleNewClient = new GoogleNewClient();
-        GoogleNewsRSS rss = googleNewClient.getNewsContentsByKeyword(kw,"US","EN","US").blockingGet();
+    private void testByKeyword(String kw, GoogleNewClient googleNewClient) {
+        GoogleNewsRSS rss = googleNewClient.getNewsContentsByKeyword(kw,"US","EN","us").blockingGet();
         assertNotNull(rss);
         List<NewsContent> contents = NewsContent.extractNewsContents(rss).toList().blockingGet();
         assertNotNull(contents);

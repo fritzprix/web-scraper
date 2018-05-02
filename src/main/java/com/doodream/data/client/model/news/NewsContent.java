@@ -87,10 +87,10 @@ public class NewsContent {
         Elements meta = document.select(CSS_SELECT_META);
 
         return Observable.just(NewsContent.builder())
-                .doOnNext(newsContentBuilder -> newsContentBuilder.title(newsItem.getTitle()))
+                .doOnNext(newsContentBuilder -> newsContentBuilder.title(NewsContent.removeRedundantBlank(newsItem.getTitle())))
                 .doOnNext(newsContentBuilder -> newsContentBuilder.url(newsItem.getLink()))
                 .doOnNext(newsContentBuilder -> newsContentBuilder.category(newsItem.getCategory()))
-                .zipWith(NewsContent.extractEpoch(newsItem.getPubDate()), NewsContentBuilder::pubDateInEpoch)
+                .zipWith(extractEpoch(newsItem.getPubDate()), NewsContentBuilder::pubDateInEpoch)
                 .zipWith(extractSource(meta, URI.create(newsItem.getLink()).getHost()), NewsContentBuilder::source)
                 .zipWith(extractAuthor(meta), NewsContentBuilder::author)
                 .zipWith(extractDescription(meta), NewsContentBuilder::description)
@@ -108,13 +108,20 @@ public class NewsContent {
         return Observable.fromIterable(meta)
                 .filter(NewsContent::hasAuthor)
                 .map(element -> element.attr(ATTR_CONTENT))
-                .map(NewsContent::avoidEmpty)
+                .map(NewsContent::removeMarkup)
                 .map(NewsContent::tripLineSeparator)
+                .map(NewsContent::removeRedundantBlank)
+                .map(String::trim)
                 .defaultIfEmpty(UNKNOWN_VALUE)
+                .map(NewsContent::avoidEmpty)
                 .map(String::toUpperCase);
     }
 
-    private static <R> String tripLineSeparator(String s) {
+    private static <R> String removeMarkup(String s) {
+        return s.replaceAll("\\<[^><]+\\>","");
+    }
+
+    private static String tripLineSeparator(String s) {
         return s.replaceAll("\\n[\\s\\S]+","");
     }
 
@@ -137,18 +144,28 @@ public class NewsContent {
                 .filter(Matcher::matches)
                 .map(m -> m.group(3))
                 .onErrorResumeNext(sourceObservable)
+                .map(NewsContent::removeRedundantBlank)
+                .map(String::trim)
                 .map(String::toUpperCase);
 
     }
 
 
+    // TODO : handle markup in body text  @ http://bcfocus.com/asia/the-cryptocurrency-landscape-in-sri-lanka/5369/
+    // TODO : handle SNS link in body text @ https://www.infoq.com/articles/qcon-london-2018
     private static Observable<String> extractArticle(Document document) {
         return Observable.fromIterable(document.body().select(CSS_SELECT_PARAGRAPH))
                 .map(Element::text)
                 .map(NewsContent::lineSeparatorToBlank)
                 .reduce(String::concat)
+                .map(NewsContent::removeRedundantBlank)
+                .map(String::trim)
                 .defaultIfEmpty("")
                 .toObservable();
+    }
+
+    private static String removeRedundantBlank(String s) {
+        return s.replaceAll("[\\s]{2,}", " ");
     }
 
     private static String lineSeparatorToBlank(String s) {
@@ -182,6 +199,8 @@ public class NewsContent {
                 .filter(s -> duplicationSearchSet.add(s.hashCode()))
                 .map(NewsContent::lineSeparatorToBlank)
                 .reduce(String::concat)
+                .map(NewsContent::removeRedundantBlank)
+                .map(String::trim)
                 .defaultIfEmpty("")
                 .toObservable();
     }
