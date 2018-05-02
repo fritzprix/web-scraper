@@ -38,6 +38,7 @@ public class HttpRequest {
                 .map(URLConnection::getInputStream)
                 .onErrorResumeNext(browserUrlConnectionObservable.map(URLConnection::getInputStream))
                 .map(HttpRequest::toHtmlString)
+                // Any exceptions will give empty string
                 .onErrorReturn(throwable -> "");
 
 

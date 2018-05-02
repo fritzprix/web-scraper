@@ -24,37 +24,35 @@ public class DailyAirConditionDetail {
     public static final int DAY_MIN = 3;
 
     public static Observable<DailyAirConditionDetail> observable(AirCharts airCharts) {
-        return Observable.create(emitter -> {
-            emitter.setDisposable(Observable.fromIterable(airCharts.getCharts())
-                    .flatMap(Arrays::<AirCharts.Row>arraySingle)
-                    .toList().subscribe((strings, throwable) -> {
-                        String[] hAvgRaw = strings.get(DailyAirConditionDetail.ROW_HOUR_AVERAGE);
-                        String[] dAvgRaw = strings.get(DailyAirConditionDetail.ROW_DAY_AVERAGE);
-                        String[] minRaw = strings.get(DailyAirConditionDetail.DAY_MIN);
-                        String[] maxRaw = strings.get(DailyAirConditionDetail.DAY_MAX);
+        return Observable.create(emitter -> emitter.setDisposable(Observable
+                .fromIterable(airCharts.getCharts())
+                .flatMap(Arrays::<AirCharts.Row>arraySingle)
+                .toList().subscribe((strings, throwable) -> {
+                    String[] hAvgRaw = strings.get(DailyAirConditionDetail.ROW_HOUR_AVERAGE);
+                    String[] dAvgRaw = strings.get(DailyAirConditionDetail.ROW_DAY_AVERAGE);
+                    String[] minRaw = strings.get(DailyAirConditionDetail.DAY_MIN);
+                    String[] maxRaw = strings.get(DailyAirConditionDetail.DAY_MAX);
 
-
-                        for (KoreanProvince province : KoreanProvince.values()) {
-                            DailyAirConditionDetail.DailyAirConditionDetailBuilder builder = DailyAirConditionDetail.builder();
-                            try {
-                                builder.measurements(java.util.Arrays.asList(
-                                        Measurement.builder().measureType(MeasureType.HOUR_AVG).value(Double.parseDouble(hAvgRaw[province.ordinal()])).build(),
-                                        Measurement.builder().measureType(MeasureType.DAY_AVG).value(Double.parseDouble(dAvgRaw[province.ordinal()])).build(),
-                                        Measurement.builder().measureType(MeasureType.MIN).value(Double.parseDouble(minRaw[province.ordinal()])).build(),
-                                        Measurement.builder().measureType(MeasureType.MAX).value(Double.parseDouble(maxRaw[province.ordinal()])).build()
-                                ));
-                            } catch (NumberFormatException e) {
-                                e.printStackTrace();
-                            }
-                            builder.publishTime(hAvgRaw[18])
-                                    .displayTime(hAvgRaw[17])
-                                    .province(province)
-                                    .item(AirConditionService.ItemCode.parse(hAvgRaw[20]));
-                            emitter.onNext(builder.build());
+                    for (KoreanProvince province : KoreanProvince.values()) {
+                        DailyAirConditionDetailBuilder builder = DailyAirConditionDetail.builder();
+                        try {
+                            builder.measurements(java.util.Arrays.asList(
+                                    Measurement.builder().measureType(MeasureType.HOUR_AVG).value(Double.parseDouble(hAvgRaw[province.ordinal()])).build(),
+                                    Measurement.builder().measureType(MeasureType.DAY_AVG).value(Double.parseDouble(dAvgRaw[province.ordinal()])).build(),
+                                    Measurement.builder().measureType(MeasureType.MIN).value(Double.parseDouble(minRaw[province.ordinal()])).build(),
+                                    Measurement.builder().measureType(MeasureType.MAX).value(Double.parseDouble(maxRaw[province.ordinal()])).build()
+                            ));
+                        } catch (NumberFormatException e) {
+                            e.printStackTrace();
                         }
-                        emitter.onComplete();
-                    }));
-        });
+                        builder.publishTime(hAvgRaw[18])
+                                .displayTime(hAvgRaw[17])
+                                .province(province)
+                                .item(AirConditionService.ItemCode.parse(hAvgRaw[20]));
+                        emitter.onNext(builder.build());
+                    }
+                    emitter.onComplete();
+                })));
     }
 
     enum MeasureType{
