@@ -1,7 +1,6 @@
 package com.doodream.data.client.model.news;
 
 import com.doodream.data.util.net.HttpRequest;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import io.reactivex.Observable;
 import io.reactivex.Single;
@@ -19,6 +18,7 @@ import java.net.URI;
 import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -32,6 +32,7 @@ public class NewsContent {
     private static final Pattern ARTICLE_MATCHER = Pattern.compile("\\<article[^<>]+\\>([\\s\\S]+)\\<\\/article\\>");
     private static final Pattern DATE_MATCHER = Pattern.compile("[a-zA-Z]+,([\\s\\S]+)\\s?GMT");
     private static final Pattern ADVERTISER = Pattern.compile("([.]+)?[Aa]dvertisement\\s?[.]+");
+    private static final Pattern HOST_TO_SOURCE = Pattern.compile("(w+\\.)?(\\S\\S\\.)?([^\\.]+)\\.[\\s\\S]+");
 
     private static final String CSS_SELECT_META = "meta";
     private static final String CSS_SELECT_PARAGRAPH = "p";
@@ -91,7 +92,7 @@ public class NewsContent {
                 .doOnNext(newsContentBuilder -> newsContentBuilder.category(newsItem.getCategory()))
                 .zipWith(NewsContent.extractEpoch(newsItem.getPubDate()), NewsContentBuilder::pubDateInEpoch)
                 .zipWith(extractSource(meta, URI.create(newsItem.getLink()).getHost()), NewsContentBuilder::source)
-                .zipWith(extractAuthor(meta),NewsContentBuilder::author)
+                .zipWith(extractAuthor(meta), NewsContentBuilder::author)
                 .zipWith(extractDescription(meta), NewsContentBuilder::description)
                 .zipWith(extractArticle(document), NewsContentBuilder::body)
                 .map(NewsContentBuilder::build)
@@ -108,11 +109,16 @@ public class NewsContent {
                 .filter(NewsContent::hasAuthor)
                 .map(element -> element.attr(ATTR_CONTENT))
                 .map(NewsContent::avoidEmpty)
+                .map(NewsContent::tripLineSeparator)
                 .defaultIfEmpty(UNKNOWN_VALUE)
                 .map(String::toUpperCase);
     }
 
-    private static <R> String avoidEmpty(String s) {
+    private static <R> String tripLineSeparator(String s) {
+        return s.replaceAll("\\n[\\s\\S]+","");
+    }
+
+    private static String avoidEmpty(String s) {
         if(s.isEmpty()) {
             return UNKNOWN_VALUE;
         }
@@ -121,31 +127,40 @@ public class NewsContent {
 
 
     private static Observable<String> extractSource(Elements meta, String host) {
-        return Observable.fromIterable(meta)
+
+        Observable<String> sourceObservable = Observable.fromIterable(meta)
                 .filter(NewsContent::hasSourceInfo)
-                .map(element -> element.attr(ATTR_CONTENT))
-                .doOnNext(s -> Preconditions.checkArgument(!s.isEmpty()))
-                .onErrorResumeNext(Observable.just(host))
-                .map(Strings::nullToEmpty)
-                .filter(s -> !s.isEmpty())
-                .defaultIfEmpty(UNKNOWN_VALUE)
-                .map(s -> s.replaceAll(ANY_NONE_ALPHA,""))
+                .map(element -> element.attr(ATTR_CONTENT));
+
+        return Observable.just(host)
+                .map(HOST_TO_SOURCE::matcher)
+                .filter(Matcher::matches)
+                .map(m -> m.group(3))
+                .onErrorResumeNext(sourceObservable)
                 .map(String::toUpperCase);
+
     }
 
 
     private static Observable<String> extractArticle(Document document) {
         return Observable.fromIterable(document.body().select(CSS_SELECT_PARAGRAPH))
                 .map(Element::text)
+                .map(NewsContent::lineSeparatorToBlank)
                 .reduce(String::concat)
                 .defaultIfEmpty("")
                 .toObservable();
     }
 
+    private static String lineSeparatorToBlank(String s) {
+        return s.replaceAll("\n"," ");
+    }
+
     private static Observable<Long> extractEpoch(String pubDate) {
+
         if(dateFormatThreadLocal.get() == null) {
             dateFormatThreadLocal.set(new SimpleDateFormat(DATE_PATTERN, Locale.ENGLISH));
         }
+
         return Single.just(DATE_MATCHER.matcher(pubDate))
                 .filter(Matcher::matches)
                 .map(matcher -> matcher.group(1))
@@ -159,10 +174,13 @@ public class NewsContent {
 
 
     private static Observable<String> extractDescription(Elements meta) {
+        HashSet<Integer> duplicationSearchSet = new HashSet<>();
 
         return Observable.fromIterable(meta)
                 .filter(NewsContent::hasDescription)
                 .map(element -> element.attr(ATTR_CONTENT))
+                .filter(s -> duplicationSearchSet.add(s.hashCode()))
+                .map(NewsContent::lineSeparatorToBlank)
                 .reduce(String::concat)
                 .defaultIfEmpty("")
                 .toObservable();
@@ -173,7 +191,6 @@ public class NewsContent {
                 || element.attr(ATTR_PROP).contains("description");
     }
 
-    // TODO : the location of source information varies through out content providers
     // for example, reuters provides U.S as a content for meta tag of og.site_name
     private static boolean hasSourceInfo(Element element) {
         return element.attr(ATTR_NAME).contains("site_name")
@@ -184,10 +201,5 @@ public class NewsContent {
         return element.attr(ATTR_NAME).equalsIgnoreCase("author")
                 || element.attr(ATTR_PROP).equalsIgnoreCase("author");
     }
-
-    public static String getUniqueKey(NewsContent content) {
-        return String.format("%s_%s", content.getUrl().hashCode(), content.getCategory().hashCode());
-    }
-
 
 }

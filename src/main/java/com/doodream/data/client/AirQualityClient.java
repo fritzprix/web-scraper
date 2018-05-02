@@ -6,24 +6,24 @@ import com.doodream.data.dagger.DaggerClientComponent;
 import com.doodream.data.model.air.DailyAirConditionSummary;
 import io.reactivex.Observable;
 import io.reactivex.Single;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import retrofit2.Response;
 import retrofit2.Retrofit;
 import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory;
 import retrofit2.converter.gson.GsonConverterFactory;
 
-import java.text.ParseException;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class AirQualityClient extends ReactiveClient {
     private ConcurrentHashMap<String, DailyAirConditionSummary> airSummaryCache;
     private AirConditionService airConditionService;
+    private HashSet<Integer> duplicationSearchSet;
 
     public AirQualityClient() {
         DaggerClientComponent.create().inject(this);
         airSummaryCache = new ConcurrentHashMap<>();
+        duplicationSearchSet = new HashSet<>();
 
         Retrofit retrofit = new Retrofit.Builder()
                 .client(getOkHttpClient())
@@ -57,27 +57,14 @@ public class AirQualityClient extends ReactiveClient {
                 .doOnComplete(emitter::onComplete)
                 .doOnError(emitter::onError)
                 .map(Single::blockingGet)
-                .doOnNext(this::cacheDailyAirSummary)
+                .filter(this::noDuplication)
                 .filter(DailyAirConditionSummary::isUpdated)
                 .subscribe(emitter::onNext)))
                 .subscribeOn(getScheduler());
     }
 
-    private void cacheDailyAirSummary(DailyAirConditionSummary dailyAirConditionSummary) throws ParseException {
-        final String key = DailyAirConditionSummary.getUniqueKey(dailyAirConditionSummary);
-        DailyAirConditionSummary lastSummary = airSummaryCache.get(key);
-        if(lastSummary == null) {
-            airSummaryCache.put(key, dailyAirConditionSummary);
-            System.out.printf("New Item Cached %s(%s)\n", key, dailyAirConditionSummary.isUpdated());
-        } else {
-            if(lastSummary.hashCode() != dailyAirConditionSummary.hashCode()) {
-                airSummaryCache.put(key, dailyAirConditionSummary);
-                System.out.printf("Cache Updated for %s(%s)\n", key, dailyAirConditionSummary.isUpdated());
-            } else {
-                dailyAirConditionSummary.setUpdated(false);
-                System.out.printf("Cache Hit for %s(%s)\n", key, dailyAirConditionSummary.isUpdated());
-            }
-        }
+    private boolean noDuplication(DailyAirConditionSummary dailyAirConditionSummary) {
+        return duplicationSearchSet.add(dailyAirConditionSummary.hashCode());
     }
 
 }
